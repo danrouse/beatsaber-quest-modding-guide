@@ -249,7 +249,11 @@ You can also pipe logcat to a file to generate dumps which may be helpful in hav
 
 ### Sharing and distribution
 
-When you're ready to share your work, package it into an installable zip file with `buildBMBF.ps1` and share it with the world! For now, #quest-mods on the BSMG Discord is the primary source of releases.
+When you're ready to share your work, package it into an installable zip file with `buildBMBF.ps1` and share it with the world!
+
+- Share it in #quest-mods on the [BSMG Discord](https://discord.gg/beatsabermods)
+- Submit your mod to [QuestBoard](https://questboard.xyz) via the [QuestBoard Hub Submission Form](https://docs.google.com/forms/d/e/1FAIpQLScT0pGWOIcifDALjuuefF7L9JgcH5epUaCcDj228DSs3KIyHg/viewform)
+
 
 ---
 
