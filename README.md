@@ -16,14 +16,18 @@ Last updated: 20 November 2020, Beat Saber 1.13.0
 - [Build scripts](#build-scripts)
 - [Hooks](#writing-hooks)
   - [Finding methods to hook](#finding-methods-to-hook)
-  - [Simple hook walkthrough: Modifying a menu](#simple-hook-walkthrough-modifying-a-menu)
-  - [Simple hook walkthrough: Modifying gameplay](#simple-hook-walkthrough-modifying-gameplay)
+    - [Dumping DLLs from the Quest](#dumping-dlls-from-the-quest)
+    - [Browsing Quest or PC DLLs using dnSpy](#browsing-quest-or-pc-dlls-using-dnspy)
+    - [Browsing codegen headers](#browsing-codegen-headers)
+- [Basic examples](#basic-examples)
+  - [Modifying a menu](#modifying-a-menu)
+  - [Modifying a gameplay attribute](#modifying-a-gameplay-attribute)
 - [Going further](#going-further)
   - [Logging](#logging)
   - [Using codegen](#using-codegen)
   - [Sharing and distribution](#sharing-and-distribution)
 - [Links](#links)
-  - [Tools](#tools)
+  - [Tools and resources](#tools-and-resources)
   - [Example repositories](#example-repositories)
 
 ---
@@ -32,7 +36,7 @@ Last updated: 20 November 2020, Beat Saber 1.13.0
 
 ### Oculus Quest setup
 
-Beat Saber should already be modded with the latest [BMBF](https://bmbf.dev/stable), with Developer Mode enabled on your Quest.
+Beat Saber should already be modded with the latest [BMBF](https://bmbf.dev/stable), with Developer Mode enabled on your Quest. You should also have [SideQuest](https://sidequestvr.com/setup-howto) installed on your computer, though if you've gotten BMBF installed without it then you likely do not need this guide.
 
 **Tips and tricks**:
 - To keep the Quest display from turning off when you remove it, you can place a piece of tape over the black sensor in the inside top-center of the headset, above the nose.
@@ -52,7 +56,7 @@ This guide assumes you're using [Visual Studio Code](https://code.visualstudio.c
 
 ## Starting a new project
 
-We will start from [Laurie's template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates).
+We will start from [Laurie's project template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates).
 
 - *(TODO: flesh this out)* Create template from zip, create project from template.
 - Add your NDK path to `includePaths` in `.vscode/c_cpp_properties.json`, e.g. `"C:\path\to\ndk\**"`
@@ -81,12 +85,9 @@ We will start from [Laurie's template](https://github.com/Lauriethefish/quest-mo
 
 Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using `MAKE_OFFSET_HOOKLESS`, then you install the hook at load-time using `INSTALL_HOOK_OFFSETLESS`.
 
-TOOD: (from sc2ad) it should also be very clear that messing up args in your hooks is a cause of GREAT PROBLEMS
-TODO: (from sc2ad) self_reference is ONLY the case in instance methods, others e.g. static methods drop the arg
+`MAKE_OFFSET_HOOKLESS` takes the args: `hook_name, return_type, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, and `...args` is all of the arguments passed to the original method. When hooking an instance method, the first argument will always be a pointer to the class instance itself, and this self-reference is _not_ included in the number of args specified when installing the hook.
 
-`MAKE_OFFSET_HOOKLESS` takes the args: `hook_name, return_type, self_reference, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, `self_reference` points to the original object being hooked, and `...args` is all of the arguments passed to the original method.
-
-Hooks replace the original function call, so you generally need to call the original function at some point in your hook. In `void` functions, you'll usually call this at the start:
+Hooks effectively replace the original function call, so you generally need to call the original function at some point in your hook. In `void` functions, you'll *usually* call this at the start (though if you're overriding values then you'll necessarily call it later):
 ```c++
 MAKE_OFFSET_HOOKLESS(MyHook, void, Il2CppObject* self, SomeType arg1, SomeType arg2) {
   MyHook(self, arg1, arg2);
@@ -108,9 +109,7 @@ MAKE_OFFSET_HOOKLESS(MyHook, int, Il2CppObject* self, SomeType arg1, SomeType ar
 }
 ```
 
-TODO: (from sc2ad) this isn't technically correct, INSTALL_HOOK_OFFSETLESS is where you install the hook in the correct place
-
-`INSTALL_HOOK_OFFSETLESS` is where you connect your hook code to the original method, using `il2cpp`. For this, you'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeClass::SomeMethod` which takes two args, then it'd look like this:
+`INSTALL_HOOK_OFFSETLESS` is where you install your hook code to the correct place using `il2cpp`, so that it runs when it's supposed to. For this, you'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeClass::SomeMethod` which takes two args, then it'd look like this:
 ```c++
 INSTALL_HOOK_OFFSETLESS(MyHook, il2cpp_utils::FindMethodUnsafe("", "SomeClass", "SomeMethod", 2))
 ```
@@ -126,31 +125,56 @@ extern "C" void load() {
 }
 ```
 
+**Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself.
+
+
 ### Finding methods to hook
 
-TODO: (from sc2ad) actual best way is using PC DLLs in dnSpy to analyze code flow. dumped methods are just headers basically. so search using PC DLLs and then confirm same methods exist in quest
+In order to search through the game's code, you need the game's DLLs (unless searching through codegen headers, as described in the latter part of this section). Both the PC and Quest versions of the game can provide these DLLs, but only those of the PC version will decompile into fully traceable code. The Quest DLLs are quite usable, but you'll have more of a guess-and-check development process as they are effectively just headers.
 
-The best way to search through game methods is to use [il2CppDumper](https://github.com/Perfare/Il2CppDumper) and [dnSpy](https://github.com/dnSpy/dnSpy) to look through the game's code:
+If you *are* using PC sources, you may want to double check that the methods you're working on are actually present in the Quest version, either by dumping them as well or by checking the codegen headers. Most, but not all, of the function signatures are identical between the two.
 
-- Get the Beat Saber APK: From SideQuest, go to "Currently Installed Apps", click the cog icon next to Beat Saber, and then click "Backup APK file".
-- Extract from APK: Use an archive tool such as [7zip](https://www.7-zip.org/) to extract `lib/arm64-v8a/libil2cpp.so` and `assets/bin/Data/Managed/Metadata/global-metadata.dat` from the APK.
-- Extract DLLs: Run [il2CppDumper](https://github.com/Perfare/Il2CppDumper) and select the two files from the previous step.
-- Browse: Use [dnSpy](https://github.com/dnSpy/dnSpy) to open the extracted `DummyDll/main.dll`. From here, you can search the methods in the extracted code. These are the methods you can hook. *TODO: dnSpy screenshot showing a method along with the corresponding code to hook that method.*
+#### Dumping DLLs from the Quest
 
-One alternative to dumping the code yourself is to search through what's available in `codegen` (which is generated through similar means):
+The process of getting the code off your Quest is basically to dump the APK, extract some files from it, and dump DLLs out of them.
+
+- *Get the Beat Saber APK*: From SideQuest, go to "Currently Installed Apps", click the cog icon next to Beat Saber, and then click "Backup APK file".
+- *Extract from APK*: Use an archive tool such as [7zip](https://www.7-zip.org/) to extract `lib/arm64-v8a/libil2cpp.so` and `assets/bin/Data/Managed/Metadata/global-metadata.dat` from the APK.
+- *Dump DLLs*: Run [il2CppDumper](https://github.com/Perfare/Il2CppDumper) and select the two files from the previous step. This will generate numerous DLLs into a `DummyDll` directory.
+
+#### Browsing Quest or PC DLLs using dnSpy
+
+Once you have your sources, whether from PC or Quest, it's time to fire up [dnSpy](https://github.com/dnSpy/dnSpy) to browse through them. Most of the relevant game code can be found in `Main.dll`, though there are also Unity libraries worth taking a look at. You can open multiple sources at a time into dnSpy and search through all of them simultaneously.
+
+![dnSpy usage example](dnSpy-example.png)
+*dnSpy can be used to browse or search through game classes and methods. These signatures are needed to properly hook methods. With PC DLLs, the method bodies will be present, while dumped Quest DLLs will have stubs.*
+
+#### Browsing codegen headers
+
+Instead of dumping the code yourself, one alternative is to search through what's available in the `codegen` Quest package, which is a core library on BMBF and thus available to all users automatically. This library is a set of headers generated via basically the same method as previously described ([Dumping DLLs from the Quest](#dumping-dlls-from-the-quest)), so either method works well as a source of truth.
 
 - Add `codegen` as a dependency: `qpm dependency add "codegen"`, then run `qpm restore` to download it.
-- Use your IDE to search through the codegen headers to find hookable methods. *TODO: screenshot of VSCode search finding something*
+- Use your IDE to search through the codegen headers to find hookable methods.
+
+![Searching through codegen headers using VSCode](vscode-codegen-example.png)
+*Searching through codegen headers can be quite effective, and will provide the same function signatures as dnSpy.*
 
 
-### Simple hook walkthrough: Modifying a menu
+---
+
+## Basic examples
+
+With a basic understanding of what's going on, let's walk through a few examples of simple modding operations so that you can make some changes to the game and see your efforts in action. Along the way, you'll encounter some new concepts that might not be elaborated on - you should be well-equipped enough from here to investigate those on your own.
+
+
+### Modifying a menu
 
 In this walkthrough, we'll modify the main menu and change the text on one of its options.
 
 *TODO: write the thing*
 
 
-### Simple hook walkthrough: Modifying gameplay
+### Modifying a gameplay attribute
 
 In this walkthrough, we'll modify gameplay by decreasing note jump speed.
 
@@ -171,7 +195,9 @@ So, to view logs specifically for your mod, and any crashes (that you probably c
 
 ```adb logcat QuestHook[my_mod|v0.1.0]:* AndroidRuntime:E *:S```
 
-TODO: (from sc2ad) you should also log main-modloader, libmain - patched, and QuestHook in general, for full details
+For broader (but not spammy) logging, consider also watching other tags related to mod loading. These logs can help diagnose a broader set of issues than just log lines you have explicitly written yourself:
+
+```adb logcat main-modloader:* libmain-patched:* QuestHook:* AndroidRuntime:E *:S```
 
 You can also pipe logcat to a file to generate dumps which may be helpful in having someone else help you.
 
@@ -183,14 +209,14 @@ You can also pipe logcat to a file to generate dumps which may be helpful in hav
 The following is an example of the same implementation using codegen headers versus raw il2cpp:
 
 ```c++
-todo
+// Without codegen
+
 ```
 
 ```c++
-todo
+// With codegen
+#
 ```
-
-Note that now that `codegen` is a core library (and therefore always included in BMBF), there is not a large filesize overhead for including it in your work.
 
 
 ### Sharing and distribution
@@ -201,11 +227,14 @@ When you're ready to share your work, package it into an installable zip file wi
 
 ## Links
 
-### Tools
+### Tools and resources
+- [SideQuest](https://sidequestvr.com/setup-howto)
+- [BMBF](https://bmbf.dev/stable)
 - [qpm (Quest Package Manager)](https://github.com/sc2ad/QuestPackageManager)
 - [il2CppDumper](https://github.com/Perfare/Il2CppDumper)
 - [dnSpy](https://github.com/dnSpy/dnSpy)
 - [7zip](https://www.7-zip.org/)
+- [Laurie's project template](https://github.com/Lauriethefish/quest-mod-template)
 
 ### Example repositories
-- [github search for hooks](https://github.com/search?q=MAKE_HOOK_OFFSETLESS&type=code)
+- [GitHub search for MAKE_HOOK_OFFSETLESS is fairly effective](https://github.com/search?q=MAKE_HOOK_OFFSETLESS&type=code)
