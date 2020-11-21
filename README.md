@@ -2,7 +2,7 @@
 
 This guide is intended to serve as a starting point for writing your own mods for Beat Saber for Oculus Quest. The modding scene for Quest is fairly small and fast-moving, so certain tools, techniques, and best practices may quickly become outdated, and instructional guides can be hard to find. To successfully write mods you'll need to be at least a little bit scrappy and resourceful.
 
-Certain assumptions are made, like that you are at least vaguely familiar with software development on Windows, and can navigate a terminal. Most resources have been created with this in mind. Mods themselves are written in C++, and this guide does not aim to teach the language.
+Certain assumptions are made, like that you are at least vaguely familiar with software development on Windows, and can navigate a terminal. Most resources have been created with this in mind. Windows is not a hard requirement, but tools and build scripts referenced here all expect it. Mods themselves are written in C++, and this guide does not aim to teach the language.
 
 When in doubt, check out the [BSMG Discord #quest-mod-dev channel](https://discord.gg/beatsabermods), and try searching on Discord before asking questions. Browsing through source code of existing mods is another great way to familiarize yourself with coding patterns and practices.
 
@@ -44,6 +44,7 @@ Beat Saber should already be modded with the latest [BMBF](https://bmbf.dev/stab
 - Wireless debugging can be enabled through SideQuest to develop without the Quest plugged in. This will quickly drain your battery and is not recommended.
 - In development, you may want to use just a single controller and have extra AA batteries handy, since they'll spend a lot of time being on.
 
+
 ### Development environment
 
 This guide assumes you're using [Visual Studio Code](https://code.visualstudio.com/), however it's not a hard requirement and plenty of modders use other IDEs, though some steps in this guide may differ.
@@ -51,6 +52,7 @@ This guide assumes you're using [Visual Studio Code](https://code.visualstudio.c
 - [Android NDK](https://developer.android.com/ndk/downloads) must be installed. Note its path for project template setup later.
 - [Android SDK](https://developer.android.com/studio/releases/platform-tools#downloads) is strongly recommended and this guide assumes it is present in your `PATH`. It's necessary for running `adb` commands.
 - [qpm (Quest Package Manager)](https://github.com/sc2ad/QuestPackageManager) is required and should be in your `PATH`. *Note*: qpm releases can be found by going to Actions on GitHub, to the latest build, and downloading the appropriate artifact for your system.
+
 
 ---
 
@@ -68,6 +70,7 @@ We will start from [Laurie's project template](https://github.com/Lauriethefish/
 
 **Tips and tricks**:
 - Commands can be run from a PowerShell terminal inside VSCode (Terminal > New Terminal or Ctrl+Shift+\`)
+
 
 ---
 
@@ -134,6 +137,7 @@ In order to search through the game's code, you need the game's DLLs (unless sea
 
 If you *are* using PC sources, you may want to double check that the methods you're working on are actually present in the Quest version, either by dumping them as well or by checking the codegen headers. Most, but not all, of the function signatures are identical between the two.
 
+
 #### Dumping DLLs from the Quest
 
 The process of getting the code off your Quest is basically to dump the APK, extract some files from it, and dump DLLs out of them.
@@ -142,12 +146,14 @@ The process of getting the code off your Quest is basically to dump the APK, ext
 - *Extract from APK*: Use an archive tool such as [7zip](https://www.7-zip.org/) to extract `lib/arm64-v8a/libil2cpp.so` and `assets/bin/Data/Managed/Metadata/global-metadata.dat` from the APK.
 - *Dump DLLs*: Run [il2CppDumper](https://github.com/Perfare/Il2CppDumper) and select the two files from the previous step. This will generate numerous DLLs into a `DummyDll` directory.
 
+
 #### Browsing Quest or PC DLLs using dnSpy
 
 Once you have your sources, whether from PC or Quest, it's time to fire up [dnSpy](https://github.com/dnSpy/dnSpy) to browse through them. Most of the relevant game code can be found in `Main.dll`, though there are also Unity libraries worth taking a look at. You can open multiple sources at a time into dnSpy and search through all of them simultaneously.
 
 ![dnSpy usage example](dnSpy-example.png)
 *dnSpy can be used to browse or search through game classes and methods. These signatures are needed to properly hook methods. With PC DLLs, the method bodies will be present, while dumped Quest DLLs will have stubs.*
+
 
 #### Browsing codegen headers
 
@@ -176,9 +182,48 @@ In this walkthrough, we'll modify the main menu and change the text on one of it
 
 ### Modifying a gameplay attribute
 
-In this walkthrough, we'll modify gameplay by decreasing note jump speed.
+In this walkthrough, we'll modify gameplay by decreasing note jump speed. Begin by creating a new project from the mod template (as described in [Starting a new project](#starting-a-new-project))
 
-*TODO: write the thing*
+Let's start out by searching for "note jump speed" with dnSpy. There are quite a few results. In order to find which is the right method to hook,  you'll need a bit of intuition, maybe to dig through methods (especially if you have PC DLLs), and possibly to write some code to hook a bunch of different methods and log out when they are called.
+
+Eventually you'll come across the `BeatmapObjectSpawnMovementData` class. If you inspect its `Update` method, it appears to use `this._startNoteJumpMovementSpeed` to calculate the actual NJS, and that property is set in the `Init` method. You can see the whole signature here, so it's time to write a little hook:
+
+```c++
+MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
+  Il2CppObject* self,
+  int noteLinesCount,
+  float startNoteJumpMovementSpeed,
+  float startBpm,
+  float noteJumpStartBeatOffset,
+  float jumpOffsetY,
+  Vector3 rightVec,
+  Vector3 forwardVec
+) {
+  BeatmapObjectSpawnMovementData_Init(self, noteLinesCount, startNoteJumpMovementSpeed, startBpm, noteJumpStartBeatOffset, jumpOffsetY, rightVec, forwardVec);
+  getLogger().info(
+    "BeatmapObjectSpawnMovementData_Init called. " + 
+    "startNoteJumpMovementSpeed is: " + std::to_string(startNoteJumpMovementSpeed)
+  );
+}
+
+extern "C" void load() {
+    il2cpp_functions::Init();
+    getLogger().info("Installing hooks...");
+    INSTALL_HOOK_OFFSETLESS(
+      BeatmapObjectSpawnMovementData_Init, 
+      il2cpp_utils::FindMethodUnsafe("", "BeatmapObjectSpawnMovementData", "Init", 7)
+    );
+    getLogger().info("Installed all hooks!");
+}
+```
+
+Now, if you run `copy.ps1` to build this and load it into your game, then start playing a song, you should see something like this logged just before the song loads in:
+```
+BeatmapObjectSpawnMovementData_Init called. startNoteJumpMovementSpeed is: 17.000000
+```
+
+All you need to do now is modify the value of `startNoteJumpSpeed` being passed to the original method in the hook. Try passing `startNoteJumpSpeed * 2.0f` or `startNoteJumpSpeed / 0.5f` and see what happens!
+
 
 ---
 
@@ -202,23 +247,6 @@ For broader (but not spammy) logging, consider also watching other tags related 
 You can also pipe logcat to a file to generate dumps which may be helpful in having someone else help you.
 
 
-### Using codegen
-
-`codegen` is a library that provides the headers for Beat Saber's builtin functions and methods. By using these headers, you can both increase the type safety of your code and avoid lots of generic calls to `il2cpp` methods. Note that there is no performance benefit here - `il2cpp` calls are relatively slow - as `codegen` is simply a layer of sugar on top of `il2cpp`.
-
-The following is an example of the same implementation using codegen headers versus raw il2cpp:
-
-```c++
-// Without codegen
-
-```
-
-```c++
-// With codegen
-#
-```
-
-
 ### Sharing and distribution
 
 When you're ready to share your work, package it into an installable zip file with `buildBMBF.ps1` and share it with the world! For now, #quest-mods on the BSMG Discord is the primary source of releases.
@@ -228,13 +256,16 @@ When you're ready to share your work, package it into an installable zip file wi
 ## Links
 
 ### Tools and resources
-- [SideQuest](https://sidequestvr.com/setup-howto)
-- [BMBF](https://bmbf.dev/stable)
-- [qpm (Quest Package Manager)](https://github.com/sc2ad/QuestPackageManager)
-- [il2CppDumper](https://github.com/Perfare/Il2CppDumper)
-- [dnSpy](https://github.com/dnSpy/dnSpy)
-- [7zip](https://www.7-zip.org/)
-- [Laurie's project template](https://github.com/Lauriethefish/quest-mod-template)
+- [BSMG Discord](https://discord.gg/beatsabermods) - primary source of mods, resources, help, and discussion about Beat Saber modding
+- [SideQuest](https://sidequestvr.com/setup-howto) - for GUI access to Quest's filesystem, and other tools including ScrCpy
+- [BMBF](https://bmbf.dev/stable) - must be installed on your Quest to start modding Beat Saber
+- [qpm (Quest Package Manager)](https://github.com/sc2ad/QuestPackageManager) - dependency repository for Quest mods
+- [il2CppDumper](https://github.com/Perfare/Il2CppDumper) - dumps Beat Saber's interface into browseable DLLs
+- [dnSpy](https://github.com/dnSpy/dnSpy) - .NET decompiler and browser to view DLL contents
+- [7zip](https://www.7-zip.org/) - archive tool which can be used to open an APK
+- [Visual Studio Code](https://code.visualstudio.com/) - relatively lightweight cross-platform code editor
+- [Laurie's project template](https://github.com/Lauriethefish/quest-mod-template) - starting point for writing a mod
+
 
 ### Example repositories
 - [GitHub search for MAKE_HOOK_OFFSETLESS is fairly effective](https://github.com/search?q=MAKE_HOOK_OFFSETLESS&type=code)
