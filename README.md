@@ -20,6 +20,7 @@ Last updated: 20 November 2020, Beat Saber 1.13.0
   - [Simple hook walkthrough: Modifying gameplay](#simple-hook-walkthrough-modifying-gameplay)
 - [Going further](#going-further)
   - [Logging](#logging)
+  - [Using codegen](#using-codegen)
   - [Sharing and distribution](#sharing-and-distribution)
 - [Links](#links)
   - [Tools](#tools)
@@ -80,6 +81,9 @@ We will start from [Laurie's template](https://github.com/Lauriethefish/quest-mo
 
 Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using `MAKE_OFFSET_HOOKLESS`, then you install the hook at load-time using `INSTALL_HOOK_OFFSETLESS`.
 
+TOOD: (from sc2ad) it should also be very clear that messing up args in your hooks is a cause of GREAT PROBLEMS
+TODO: (from sc2ad) self_reference is ONLY the case in instance methods, others e.g. static methods drop the arg
+
 `MAKE_OFFSET_HOOKLESS` takes the args: `hook_name, return_type, self_reference, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, `self_reference` points to the original object being hooked, and `...args` is all of the arguments passed to the original method.
 
 Hooks replace the original function call, so you generally need to call the original function at some point in your hook. In `void` functions, you'll usually call this at the start:
@@ -104,6 +108,8 @@ MAKE_OFFSET_HOOKLESS(MyHook, int, Il2CppObject* self, SomeType arg1, SomeType ar
 }
 ```
 
+TODO: (from sc2ad) this isn't technically correct, INSTALL_HOOK_OFFSETLESS is where you install the hook in the correct place
+
 `INSTALL_HOOK_OFFSETLESS` is where you connect your hook code to the original method, using `il2cpp`. For this, you'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeClass::SomeMethod` which takes two args, then it'd look like this:
 ```c++
 INSTALL_HOOK_OFFSETLESS(MyHook, il2cpp_utils::FindMethodUnsafe("", "SomeClass", "SomeMethod", 2))
@@ -122,6 +128,8 @@ extern "C" void load() {
 
 ### Finding methods to hook
 
+TODO: (from sc2ad) actual best way is using PC DLLs in dnSpy to analyze code flow. dumped methods are just headers basically. so search using PC DLLs and then confirm same methods exist in quest
+
 The best way to search through game methods is to use [il2CppDumper](https://github.com/Perfare/Il2CppDumper) and [dnSpy](https://github.com/dnSpy/dnSpy) to look through the game's code:
 
 - Get the Beat Saber APK: From SideQuest, go to "Currently Installed Apps", click the cog icon next to Beat Saber, and then click "Backup APK file".
@@ -131,8 +139,8 @@ The best way to search through game methods is to use [il2CppDumper](https://git
 
 One alternative to dumping the code yourself is to search through what's available in `codegen` (which is generated through similar means):
 
-- Add `codegen` as a dependency in `qpm.json`, then run `qpm restore` to download it. *TODO: specifics*
-- Use your IDE to search through codegen headers to find hookable methods. *TODO: screenshot of VSCode search finding something*
+- Add `codegen` as a dependency: `qpm dependency add "codegen"`, then run `qpm restore` to download it.
+- Use your IDE to search through the codegen headers to find hookable methods. *TODO: screenshot of VSCode search finding something*
 
 
 ### Simple hook walkthrough: Modifying a menu
@@ -159,11 +167,30 @@ With your environment setup and a basic understanding of hooks, you're well on y
 
 Make liberal use of logs to debug when calls are happening and why crashes are occurring. Logs can be viewed in realtime using `adb logcat`. To view logs only for your mod, filter for `QuestHook[$mod_id|v$mod_version]:*`. To view crash logs, `AndroidRuntime:E`.
 
-So, to view logs for your mod, and any crashes (that you probably caused! 😂):
+So, to view logs specifically for your mod, and any crashes (that you probably caused! 😂):
 
 ```adb logcat QuestHook[my_mod|v0.1.0]:* AndroidRuntime:E *:S```
 
+TODO: (from sc2ad) you should also log main-modloader, libmain - patched, and QuestHook in general, for full details
+
 You can also pipe logcat to a file to generate dumps which may be helpful in having someone else help you.
+
+
+### Using codegen
+
+`codegen` is a library that provides the headers for Beat Saber's builtin functions and methods. By using these headers, you can both increase the type safety of your code and avoid lots of generic calls to `il2cpp` methods. Note that there is no performance benefit here - `il2cpp` calls are relatively slow - as `codegen` is simply a layer of sugar on top of `il2cpp`.
+
+The following is an example of the same implementation using codegen headers versus raw il2cpp:
+
+```c++
+todo
+```
+
+```c++
+todo
+```
+
+Note that now that `codegen` is a core library (and therefore always included in BMBF), there is not a large filesize overhead for including it in your work.
 
 
 ### Sharing and distribution
