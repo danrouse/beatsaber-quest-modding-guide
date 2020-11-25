@@ -64,7 +64,7 @@ We will start from [Laurie's project template](https://github.com/Lauriethefish/
 - Add your NDK path to `includePaths` in `.vscode/c_cpp_properties.json`, e.g. `"C:\path\to\ndk\**"`
 - If you extracted a downloaded zip of the template, for each `.ps1` file, go to the file's Properties and check "Unblock" to avoid a confirmation prompty every time you run a script.
 - Run `qpm restore`. This will download the dependencies defined in `qpm.json`. When you add or change a dependency, rerun the command. See [the qpm repository](https://github.com/sc2ad/QuestPackageManager) for more information on using qpm.
-- Your mod requires a name for the library NDK will generate. Replace all references of `#{id}` in `build.ps1` with the name of your mod
+- Your mod requires a name for the library NDK will generate. Replace all references of `#{id}` in the all `.ps1` files with the name you want to give your library
   - *Note*: A simple name (no spaces, no special characters) is preferred for this ID since it will be able to be referenced better in different operative systems
 - To run an initial test build, run `build.ps1`.
   - *Note*: The template includes references to a specific version of `beatsaber_hook` which qpm will likely download a newer version of. This initial build will fail and you'll need to change those versioned references, e.g. find and replace `beatsaber_hook_0_8_2` with `beatsaber_hook_0_8_4` (assuming `0_8_4` is the newest downloaded version)
