@@ -63,9 +63,10 @@ This guide assumes you're using [Visual Studio Code](https://code.visualstudio.c
 
 We will start from [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates).
 
-- *(TODO: flesh this out)* Create template from zip, create project from template.
-- Add your NDK path to `includePaths` in `.vscode/c_cpp_properties.json`, e.g. `"C:\path\to\ndk\**"`
-- If you extracted a downloaded zip of the template, for each `.ps1` file, go to the file's Properties and check "Unblock" to avoid a confirmation prompty every time you run a script.
+- Open the project templates dir (Ctrl+Shift+P > Project: Open Templates folder) and extract the Quest mod template there.
+- Open a new folder in VSCode and create a project from the template you just created.
+  - For `ndkpath`, add the path to your NDK _using forward slashes_.
+  - `id` is the internal name of your mod (no spaces)
 - Run `qpm restore`. This will download the dependencies defined in `qpm.json`. When you add or change a dependency, rerun the command. See [the qpm repository](https://github.com/sc2ad/QuestPackageManager) for more information on using qpm.
 - To run an initial test build, run `build.ps1`.
   - *Note*: The template includes references to a specific version of `beatsaber_hook` which qpm will likely download a newer version of. This initial build will fail and you'll need to change those versioned references, e.g. find and replace `beatsaber_hook_0_8_2` with `beatsaber_hook_0_8_4` (assuming `0_8_4` is the newest downloaded version)
