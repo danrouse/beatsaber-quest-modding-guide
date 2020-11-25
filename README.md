@@ -14,11 +14,14 @@ Last updated: 20 November 2020, Beat Saber 1.13.0
   - [Development environment](#development-environment)
 - [Starting a new project](#starting-a-new-project)
 - [Build scripts](#build-scripts)
-- [Hooks](#writing-hooks)
-  - [Finding methods to hook](#finding-methods-to-hook)
-    - [Dumping DLLs from the Quest](#dumping-dlls-from-the-quest)
-    - [Browsing Quest or PC DLLs using dnSpy](#browsing-quest-or-pc-dlls-using-dnspy)
-    - [Browsing codegen headers](#browsing-codegen-headers)
+- [Modding concepts](#modding-concepts)
+  - [il2cpp and codegen](#il2cpp-and-codegen)
+  - [Hooks](#writing-hooks)
+    - [Finding methods to hook](#finding-methods-to-hook)
+      - [Dumping DLLs from the Quest](#dumping-dlls-from-the-quest)
+      - [Browsing Quest or PC DLLs using dnSpy](#browsing-quest-or-pc-dlls-using-dnspy)
+      - [Browsing codegen headers](#browsing-codegen-headers)
+  - [Unity engine](#unity-engine)
 - [Basic examples](#basic-examples)
   - [Modifying a menu](#modifying-a-menu)
   - [Modifying a gameplay attribute](#modifying-a-gameplay-attribute)
@@ -58,7 +61,7 @@ This guide assumes you're using [Visual Studio Code](https://code.visualstudio.c
 
 ## Starting a new project
 
-We will start from [Laurie's project template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates).
+We will start from [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates).
 
 - *(TODO: flesh this out)* Create template from zip, create project from template.
 - Add your NDK path to `includePaths` in `.vscode/c_cpp_properties.json`, e.g. `"C:\path\to\ndk\**"`
@@ -76,39 +79,64 @@ We will start from [Laurie's project template](https://github.com/Lauriethefish/
 
 ## Build scripts
 
-- `copy.ps1` will build the mod and copy it directly to your Quest's mods directory (`/sdcard/Android/data/com.beatgames.beatsaber/files/mods`)
-  - (Re)start BeatSaber: `adb shell am start com.beatgames.beatsaber/com.unity3d.player.UnityPlayerActivity`
-  - Realtime logs: `adb logcat QuestHook[#{id}|#{version}]:* *:S` (see [Logging](#logging))
+- `copy.ps1` will build the mod and copy it directly to your Quest's mods directory (`/sdcard/Android/data/com.beatgames.beatsaber/files/mods`). Run `copy.ps1 --log` to begin logging from the Quest to your terminal after the files are copied and the game restarts.
 - `build.ps1` will just build the mod (generates `.so` file) and nothing else. Not super useful outside of confirming code validity.
 - `buildBMBF.ps1` will build the mod and package it into a `.zip` that can be installed via BMBF. Once you are ready to share the mod with others, this is the thing you distribute.
 
 ---
 
-## Hooks
+## Modding concepts
+
+Beat Saber is made using Unity and most of the game is written in C#. This C# is compiled down to C++, and it's part that you can interface with to mod the game. [beatsaber-hook](TODO:link) provides utilities to interact with this layer and the underlying C# code for both the game and the Unity engine.
+
+
+### Il2Cpp and codegen
+
+`il2cpp` is the mechanism that Unity uses to compile game code into C++. `libil2cpp` and beatsaber-hook's `il2cpp_utils` can be used to interface with the game's original C# types and methods. Important to note that most of the values returned by these methods are pointers to objects with C# types.
+
+Here's a super high-level view at commonly used types and methods:
+```c++
+Il2CppObject* generic_object; // untyped reference to an arbitrary C# object
+std::optional<Il2CppObject*> member_value = il2cpp_utils::GetPropertyValue(generic_object, "property_name");
+std::optional<bool> typed_property = il2cpp_utils::GetPropertyValue<bool>(generic_object, "string_property");
+MethodInfo* member_method = il2cpp_utils::FindMethod(generic_object, "method_name");
+std::optional<bool> method_retval = il2cpp_utils::RunMethod<bool>(generic_object, "method_name", some_arg)
+Il2CppClass* cs_class = il2cpp_utils::GetClassFromName("Namespace", "ClassName");
+System::Type class_type_reference = cs_class::GetType();
+
+Il2CppString* string_from_game; // C# strings are pointers to UTF-16 strings
+std::string native_string = to_utf8(csstrtostr(string_from_game)); 
+```
+
+For a full view of the interface, look into [il2cpp-utils.hpp](TODO:link)
+
+[codegen](TODO:link) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely because they provide full intellisense/auto-completion, and can help avoid some boilerplate.
+
+Here's an brief comparison between some of the methods shown above and their codegen equivalents:
+```c++
+// TODO
+```
+
+
+### Hooks
 
 Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using `MAKE_OFFSET_HOOKLESS`, then you install the hook at load-time using `INSTALL_HOOK_OFFSETLESS`.
 
 `MAKE_OFFSET_HOOKLESS` takes the args: `hook_name, return_type, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, and `...args` is all of the arguments passed to the original method. When hooking an instance method, the first argument will always be a pointer to the class instance itself, and this self-reference is _not_ included in the number of args specified when installing the hook.
 
-Hooks effectively replace the original function call, so you generally need to call the original function at some point in your hook. In `void` functions, you'll *usually* call this at the start (though if you're overriding values then you'll necessarily call it later):
+Hooks effectively replace the original function call, so you generally need to call the original function at some point in your hook. Make sure to return the appropriate type for the function you are hooking:
 ```c++
+// For a void hook, just make sure to call the original at some point
 MAKE_OFFSET_HOOKLESS(MyHook, void, Il2CppObject* self, SomeType arg1, SomeType arg2) {
+  // your code here
   MyHook(self, arg1, arg2);
-  /* your code here */
+  // or here
 }
-```
-
-In functions that return a value, you'll want to make sure to return the original value at the end:
-```c++
-MAKE_OFFSET_HOOKLESS(MyHook, int, Il2CppObject* self, SomeType arg1, SomeType arg2) {
-  // either option A: retrieve the value and return it later
-  int original_value = MyHook(self, arg1, arg2);
-  /* your code here */
+// When the hooked function returns a value, make sure to return something of that type
+MAKE_OFFSET_HOOKLESS(MyHook2, int, Il2CppObject* self, SomeType arg1, SomeType arg2) {
+  int original_value = MyHook2(self, arg1, arg2);
+  // your code here
   return original_value;
-
-  // or option B: just return the original value directly
-  /* your code here */
-  return MyHook(self, arg1, arg2);
 }
 ```
 
@@ -131,14 +159,14 @@ extern "C" void load() {
 **Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself.
 
 
-### Finding methods to hook
+#### Finding methods to hook
 
 In order to search through the game's code, you need the game's DLLs (unless searching through codegen headers, as described in the latter part of this section). Both the PC and Quest versions of the game can provide these DLLs, but only those of the PC version will decompile into fully traceable code. The Quest DLLs are quite usable, but you'll have more of a guess-and-check development process as they are effectively just headers.
 
 If you *are* using PC sources, you may want to double check that the methods you're working on are actually present in the Quest version, either by dumping them as well or by checking the codegen headers. Most, but not all, of the function signatures are identical between the two.
 
 
-#### Dumping DLLs from the Quest
+##### Dumping DLLs from the Quest
 
 The process of getting the code off your Quest is basically to dump the APK, extract some files from it, and dump DLLs out of them.
 
@@ -147,7 +175,7 @@ The process of getting the code off your Quest is basically to dump the APK, ext
 - *Dump DLLs*: Run [il2CppDumper](https://github.com/Perfare/Il2CppDumper) and select the two files from the previous step. This will generate numerous DLLs into a `DummyDll` directory.
 
 
-#### Browsing Quest or PC DLLs using dnSpy
+##### Browsing Quest or PC DLLs using dnSpy
 
 Once you have your sources, whether from PC or Quest, it's time to fire up [dnSpy](https://github.com/dnSpy/dnSpy) to browse through them. Most of the relevant game code can be found in `Main.dll`, though there are also Unity libraries worth taking a look at. You can open multiple sources at a time into dnSpy and search through all of them simultaneously.
 
@@ -155,7 +183,7 @@ Once you have your sources, whether from PC or Quest, it's time to fire up [dnSp
 *dnSpy can be used to browse or search through game classes and methods. These signatures are needed to properly hook methods. With PC DLLs, the method bodies will be present, while dumped Quest DLLs will have stubs.*
 
 
-#### Browsing codegen headers
+##### Browsing codegen headers
 
 Instead of dumping the code yourself, one alternative is to search through what's available in the `codegen` Quest package, which is a core library on BMBF and thus available to all users automatically. This library is a set of headers generated via basically the same method as previously described ([Dumping DLLs from the Quest](#dumping-dlls-from-the-quest)), so either method works well as a source of truth.
 
@@ -164,6 +192,13 @@ Instead of dumping the code yourself, one alternative is to search through what'
 
 ![Searching through codegen headers using VSCode](vscode-codegen-example.png)
 *Searching through codegen headers can be quite effective, and will provide the same function signatures as dnSpy.*
+
+
+### Unity engine
+
+Since the game itself is made with Unity, you can use everything available in the [Unity Scripting API](https://docs.unity3d.com/ScriptReference/index.html) to interface with the game world.
+
+TODO:anything else to talk about here other than link to docs?
 
 
 ---
@@ -268,7 +303,7 @@ When you're ready to share your work, package it into an installable zip file wi
 - [dnSpy](https://github.com/dnSpy/dnSpy) - .NET decompiler and browser to view DLL contents
 - [7zip](https://www.7-zip.org/) - archive tool which can be used to open an APK
 - [Visual Studio Code](https://code.visualstudio.com/) - relatively lightweight cross-platform code editor
-- [Laurie's project template](https://github.com/Lauriethefish/quest-mod-template) - starting point for writing a mod
+- [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template) - starting point for writing a mod
 
 
 ### Example repositories
