@@ -25,8 +25,8 @@ Last updated: 20 November 2020, Beat Saber 1.13.0
   - [il2cpp and codegen](#il2cpp-and-codegen)
   - [Unity engine](#unity-engine)
 - [Basic examples](#basic-examples)
-  - [Modifying a menu](#modifying-a-menu)
   - [Modifying a gameplay attribute](#modifying-a-gameplay-attribute)
+  - [Modifying a menu](#modifying-a-menu)
 - [Going further](#going-further)
   - [Logging](#logging)
   - [Using codegen](#using-codegen)
@@ -139,9 +139,9 @@ MAKE_OFFSET_HOOKLESS(MyHook2, int, Il2CppObject* self, SomeType arg1, SomeType a
 }
 ```
 
-`INSTALL_HOOK_OFFSETLESS` is where you install your hook code to the correct place using `il2cpp`, so that it runs when it's supposed to. For this, you'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeClass::SomeMethod` which takes two args, then it'd look like this:
+`INSTALL_HOOK_OFFSETLESS` is where you install your hook code to the correct place using `il2cpp`, so that it runs when it's supposed to. For this, you'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeNamespace::SomeClass::SomeMethod` which takes two args, then it'd look like this:
 ```c++
-INSTALL_HOOK_OFFSETLESS(MyHook, il2cpp_utils::FindMethodUnsafe("", "SomeClass", "SomeMethod", 2))
+INSTALL_HOOK_OFFSETLESS(MyHook, il2cpp_utils::FindMethodUnsafe("SomeNamespace", "SomeClass", "SomeMethod", 2))
 ```
 
 As an example to put these together, let's say you want to a hook a method in the `Foo` class called `SomeMethod` that returns a `float` and takes one `char*` argument:
@@ -154,6 +154,8 @@ extern "C" void load() {
   INSTALL_HOOK_OFFSETLESS(MyHook, il2cpp_utils::FindMethodUnsafe("", "Foo", "SomeMethod", 1));
 }
 ```
+
+Note that when finding methods, nested namespaces use C#-style syntax: `FindMethodUnsafe("SomeNamespace.NestedNamespace", "ClassName", "MethodName", 0)`. In addition, game methods in `GlobalNamespace` take an empty string as the namespace argument, e.g. `FindMethodUnsafe("", "MainMenuViewController", "DidActivate", 3);`.
 
 **Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself. Even if your game doesn't crash, if you do not have the exact same function signature for your hook, weird things may happen!
 
@@ -214,11 +216,32 @@ std::string native_string = to_utf8(csstrtostr(string_from_game));
 
 For a full view of the interface, look into [the header for il2cpp_utils](https://github.com/sc2ad/beatsaber-hook/blob/master/shared/utils/il2cpp-utils.hpp).
 
-[codegen](https://github.com/sc2ad/BeatSaber-Quest-Codegen) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely because they provide full intellisense/auto-completion, and can help avoid some boilerplate.
+---
+
+[codegen](https://github.com/sc2ad/BeatSaber-Quest-Codegen) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely increased type-safety and intellisense method checking.
 
 Here's an brief comparison between some of the methods shown above and their codegen equivalents:
 ```c++
-// TODO
+// In a hook: say you're hooking GlobalNamespace::Foo::Bar
+INSTALL_HOOK_OFFSETLESS(MyHook, FindMethodUnsafe("", "Foo", "Bar", 0));
+// If you include that class from codegen
+#include "GlobalNamespace/Foo.hpp"
+// Then instead of an Il2CppObject*, you can use an actual instance of Foo*
+MAKE_HOOK_OFFSETLESS(MyHook, void, Foo* self) { MyHook(self); }
+
+void something(Foo* instance) {
+  // Methods can be called directly, so instead of this:
+  auto result = il2cpp_utils::RunMethod<T>(instance, "bar");
+  // You can use this:
+  auto result = instance->bar();
+
+  // Similarly for getting properties
+  auto prop = il2cpp_utils::GetPropertyValue<T>(instance, "someProperty");
+  // You can get the property directly,
+  auto prop = instance->someProperty; // usually unsafe
+  // or more often, use the generated getter:
+  auto prop = instance->get_someProperty();
+}
 ```
 
 
@@ -256,13 +279,6 @@ my_text->set_text(il2cpp_utils::createcsstr("hello world"));
 With a basic understanding of what's going on, let's walk through a few examples of simple modding operations so that you can make some changes to the game and see your efforts in action. Along the way, you'll encounter some new concepts that might not be elaborated on - you should be well-equipped enough from here to investigate those on your own.
 
 
-### Modifying a menu
-
-In this walkthrough, we'll modify the main menu and change the text on one of its options.
-
-*TODO: write the thing*
-
-
 ### Modifying a gameplay attribute
 
 In this walkthrough, we'll modify gameplay by decreasing note jump speed. Begin by creating a new project from the mod template (as described in [Starting a new project](#starting-a-new-project))
@@ -272,8 +288,9 @@ Let's start out by searching for "note jump speed" with dnSpy. There are quite a
 Eventually you'll come across the `BeatmapObjectSpawnMovementData` class. If you inspect its `Update` method, it appears to use `this._startNoteJumpMovementSpeed` to calculate the actual NJS, and that property is set in the `Init` method. You can see the whole signature here, so it's time to write a little hook:
 
 ```c++
+#include "GlobalNamespace/BeatmapObjectSpawnMovementData.hpp"
 MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
-  Il2CppObject* self,
+  BeatmapObjectSpawnMovementData* self,
   int noteLinesCount,
   float startNoteJumpMovementSpeed,
   float startBpm,
@@ -291,22 +308,70 @@ MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
 
 extern "C" void load() {
   il2cpp_functions::Init();
-  getLogger().info("Installing hooks...");
   INSTALL_HOOK_OFFSETLESS(
     BeatmapObjectSpawnMovementData_Init, 
     il2cpp_utils::FindMethodUnsafe("", "BeatmapObjectSpawnMovementData", "Init", 7)
   );
-  getLogger().info("Installed all hooks!");
 }
 ```
 
-Now, if you run `copy.ps1` to build this and load it into your game, then start playing a song, you should see something like this logged just before the song loads in:
+Now, if you run `copy.ps1` to build this and load it into your game, then start playing a song, you should see something similar to this logged just before the song loads in:
 ```
 BeatmapObjectSpawnMovementData_Init called. startNoteJumpMovementSpeed is: 17.000000
 ```
 
 All you need to do now is modify the value of `startNoteJumpSpeed` being passed to the original method in the hook. Try passing `startNoteJumpSpeed * 2.0f` or `startNoteJumpSpeed / 0.5f` and see what happens!
 
+
+### Modifying a menu
+
+In this walkthrough, we'll modify the main menu and change the text on one of its options. To do this, we need to know two things: which function to hook, and what GameObject to change.
+
+For finding the function to hook, search around using dnSpy or through the codegen headers for the MainMenu (left as an exercise for the reader 😉). From this you'll find a `MainMenuViewController` class. You may eventually find that all menus have an associated `ViewController` class, and these all have a `DidActivate` method that gets called when the menus become active.
+
+For finding the GameObject, this is a bit harder without the PC version of the game and Runtime Unity Editor. One exercise you can try is to write some code to iterate through text components in the scene (generally `HMUI::CurvedTextMeshPro`) and find their text and parent GameObjects:
+
+```c++
+std::optional<UnityEngine::GameObject*> FindComponentWithText(std::string_view find_text) {
+  // find root components in scene
+  auto scene = UnityEngine::SceneManager::GetActiveScene();
+  auto root_objs = scene.GetRootGameObjects();
+  for (int i = 0; i < root_objs->Length(); i++) {
+    auto text_components = root_objs->values[i]->GetComponentsInChildren<HMUI::CurvedTextMeshPro>();
+    for (int j = 0; j < text_components->Length(); j++) {
+      auto text = to_utf8(csstrtostr(text_components->values[i]->get_text()));
+      if (text == find_text) {
+        return text_components->values[i]->get_gameObject();
+      }
+    }
+  }
+  return {};
+}
+```
+
+At any rate, let's say we want to replace the text on the main menu button that says "Solo". This happens to be on a GameObject called `SoloButton`, so with our hook in the right place, it's just a matter of finding that object, getting its text component, and setting the text:
+
+```c++
+#include "GlobalNamespace/MainMenuViewController.hpp"
+#include "HMUI/CurvedTextMeshPro.hpp"
+MAKE_HOOK_OFFSETLESS(MainMenuViewController_DidActivate, void,
+  MainMenuViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling
+) {
+  MainMenuViewController_DidActivate(self, firstActivation, addedToHierarchy, screenSystemEnabling);
+  auto solo_button = UnityEngine::GameObject::Find(il2cpp_utils::createcsstr("SoloButton"));
+  auto solo_text = solo_button->FindComponent<HMUI::CurvedTextMeshPro>();
+  solo_text->set_text("Hello World");
+}
+extern "C" void load() {
+  il2cpp_functions::Init();
+  INSTALL_HOOK_OFFSETLESS(
+    MainMenuViewController_DidActivate, 
+    il2cpp_utils::FindMethodUnsafe("", "MainMenuViewController", "DidActivate", 3)
+  );
+}
+```
+
+With any luck, after compiling and copying this to your Quest, you'll now have a Hello World button on the main menu! 
 
 ---
 
