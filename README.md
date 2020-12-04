@@ -114,7 +114,7 @@ Once your project directory is set up and all template tags have been replaced.
 
 ## Modding concepts
 
-Beat Saber is made using Unity and most of the game is written in C#. This C# is compiled down to C++, and it's part that you can interface with to mod the game. [beatsaber-hook](TODO:link) provides utilities to interact with this layer and the underlying C# code for both the game and the Unity engine. At a high level, the modding process involves finding and hooking some game method and using UnityEngine to interact with the game world. In this section we'll explore these concepts.
+Beat Saber is made using Unity and most of the game is written in C#. This C# is compiled down to C++, and it's part that you can interface with to mod the game. [beatsaber-hook](https://github.com/sc2ad/beatsaber-hook) provides utilities to interact with this layer and the underlying C# code for both the game and the Unity engine. At a high level, the modding process involves finding and hooking some game method and using UnityEngine to interact with the game world. In this section we'll explore these concepts.
 
 
 ### Hooks
@@ -155,7 +155,7 @@ extern "C" void load() {
 }
 ```
 
-**Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself.
+**Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself. Even if your game doesn't crash, if you do not have the exact same function signature for your hook, weird things may happen!
 
 
 #### Finding methods to hook
@@ -212,9 +212,9 @@ Il2CppString* string_from_game; // C# strings are pointers to UTF-16 strings
 std::string native_string = to_utf8(csstrtostr(string_from_game)); 
 ```
 
-For a full view of the interface, look into [il2cpp-utils.hpp](TODO:link)
+For a full view of the interface, look into [the header for il2cpp_utils](https://github.com/sc2ad/beatsaber-hook/blob/master/shared/utils/il2cpp-utils.hpp).
 
-[codegen](TODO:link) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely because they provide full intellisense/auto-completion, and can help avoid some boilerplate.
+[codegen](https://github.com/sc2ad/BeatSaber-Quest-Codegen) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely because they provide full intellisense/auto-completion, and can help avoid some boilerplate.
 
 Here's an brief comparison between some of the methods shown above and their codegen equivalents:
 ```c++
@@ -290,13 +290,13 @@ MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
 }
 
 extern "C" void load() {
-    il2cpp_functions::Init();
-    getLogger().info("Installing hooks...");
-    INSTALL_HOOK_OFFSETLESS(
-      BeatmapObjectSpawnMovementData_Init, 
-      il2cpp_utils::FindMethodUnsafe("", "BeatmapObjectSpawnMovementData", "Init", 7)
-    );
-    getLogger().info("Installed all hooks!");
+  il2cpp_functions::Init();
+  getLogger().info("Installing hooks...");
+  INSTALL_HOOK_OFFSETLESS(
+    BeatmapObjectSpawnMovementData_Init, 
+    il2cpp_utils::FindMethodUnsafe("", "BeatmapObjectSpawnMovementData", "Init", 7)
+  );
+  getLogger().info("Installed all hooks!");
 }
 ```
 
@@ -352,7 +352,7 @@ When you're ready to share your work, package it into an installable zip file wi
 - [7zip](https://www.7-zip.org/) - archive tool which can be used to open an APK
 - [Visual Studio Code](https://code.visualstudio.com/) - relatively lightweight cross-platform code editor
 - [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template) - starting point for writing a mod
-
+- [Runtime Unity Editor](https://github.com/ManlyMarco/RuntimeUnityEditor) - extension for PC Beat Saber to explore the Unity game world
 
 ### Example repositories
 - [GitHub search for MAKE_HOOK_OFFSETLESS is fairly effective](https://github.com/search?q=MAKE_HOOK_OFFSETLESS&type=code)
