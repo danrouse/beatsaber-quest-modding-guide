@@ -13,14 +13,16 @@ Last updated: 20 November 2020, Beat Saber 1.13.0
   - [Oculus Quest setup](#oculus-quest-setup)
   - [Development environment](#development-environment)
 - [Starting a new project](#starting-a-new-project)
+  - [Using VSCode Project Templates](#using-vscode-project-templates)
+  - [Without Project Templates](#without-project-templates)
 - [Build scripts](#build-scripts)
 - [Modding concepts](#modding-concepts)
-  - [il2cpp and codegen](#il2cpp-and-codegen)
   - [Hooks](#writing-hooks)
     - [Finding methods to hook](#finding-methods-to-hook)
       - [Dumping DLLs from the Quest](#dumping-dlls-from-the-quest)
       - [Browsing Quest or PC DLLs using dnSpy](#browsing-quest-or-pc-dlls-using-dnspy)
       - [Browsing codegen headers](#browsing-codegen-headers)
+  - [il2cpp and codegen](#il2cpp-and-codegen)
   - [Unity engine](#unity-engine)
 - [Basic examples](#basic-examples)
   - [Modifying a menu](#modifying-a-menu)
@@ -61,15 +63,39 @@ This guide assumes you're using [Visual Studio Code](https://code.visualstudio.c
 
 ## Starting a new project
 
-We will start from [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates).
+We will start from [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template). It's made to use the VSCode [Project Templates extension by cantonios](https://marketplace.visualstudio.com/items?itemName=cantonios.project-templates). If you're using VSCode and the extension, see the next section ([Using VSCode Project Templates](#using-vscode-project-templates)), otherwise skip to the one after ([Without Project Templates](#without-project-templates))
 
-- Open the project templates dir (Ctrl+Shift+P > Project: Open Templates folder) and extract the Quest mod template there.
-- Open a new folder in VSCode and create a project from the template you just created.
+### Using VSCode Project Templates
+
+With the VSCode extension installed:
+- Open the project templates folder (Ctrl+Shift+P > `Project: Open Templates Folder`) and extract the Quest mod template into a new folder inside the templates folder.
+- Create a new empty folder for your project somewhere and open it in VSCode (File > `Open Folder...`)
+- Create a project from the template (Ctrl+Shift+P > `Project: Create Project from Template`)
   - For `ndkpath`, add the path to your NDK _using forward slashes_.
-  - `id` is the internal name of your mod (no spaces)
+  - `id` is the internal name of your mod (no spaces).
+  - `name` is the readable name of your mod.
+  - `author` is your name or handle.
+  - `description` is a short description of your mod.
+
+### Without Project Templates
+
+- Extract the template ZIP into a new folder somewhere.
+- For each `.ps1` file, right click > Properties > Check "Unblock" on the lower right. This will prevent a security confirmation every time you run one of the scripts.
+- Find and replace each of the project template tags throughout the project:
+  - Replace `#{ndkpath}` with the path to your NDK _using forward slashes_.
+  - Replace `#{id}` with the internal name of your mod (no spaces).
+  - Replace `#{name}` with the readable name of your mod.
+  - Replace `#{author}` with your name or handle.
+  - Replace `#{description}` with a short description of your mod.
+- In case the template may be updated with additional tags, you may want to do an extra project wide search for the template tag format (e.g. `#\{([^}]+)\}` if you have regex search)
+
+---
+
+Once your project directory is set up and all template tags have been replaced.
+
 - Run `qpm restore`. This will download the dependencies defined in `qpm.json`. When you add or change a dependency, rerun the command. See [the qpm repository](https://github.com/sc2ad/QuestPackageManager) for more information on using qpm.
 - To run an initial test build, run `build.ps1`.
-  - *Note*: The template includes references to a specific version of `beatsaber_hook` which qpm will likely download a newer version of. This initial build will fail and you'll need to change those versioned references, e.g. find and replace `beatsaber_hook_0_8_2` with `beatsaber_hook_0_8_4` (assuming `0_8_4` is the newest downloaded version)
+  - *Note*: The template may include references to a specific version of `beatsaber_hook` which qpm may download a newer version of. This will cause the initial build to fail and you'll need to change those versioned references, e.g. find and replace `beatsaber_hook_0_8_2` with `beatsaber_hook_0_8_4` (assuming `0_8_4` is the newest downloaded version)
 - Once you get the build succeeding, congratulations! You've compiled a Beat Saber mod. 
 
 **Tips and tricks**:
@@ -80,43 +106,15 @@ We will start from [Lauriethefish's project template](https://github.com/Lauriet
 
 ## Build scripts
 
-- `copy.ps1` will build the mod and copy it directly to your Quest's mods directory (`/sdcard/Android/data/com.beatgames.beatsaber/files/mods`). Run `copy.ps1 --log` to begin logging from the Quest to your terminal after the files are copied and the game restarts.
-- `build.ps1` will just build the mod (generates `.so` file) and nothing else. Not super useful outside of confirming code validity.
+- `build.ps1` will just build the mod (generates `.so` file) and nothing else. Useful for confirming code validity, but you may want to use other scripts to do more useful things with the build output.
 - `buildBMBF.ps1` will build the mod and package it into a `.zip` that can be installed via BMBF. Once you are ready to share the mod with others, this is the thing you distribute.
+- `copy.ps1` will build the mod and copy it directly to your Quest's mods directory (`/sdcard/Android/data/com.beatgames.beatsaber/files/mods`). Run `copy.ps1 --log` to begin logging from the Quest to your terminal after the files are copied and the game restarts.
 
 ---
 
 ## Modding concepts
 
-Beat Saber is made using Unity and most of the game is written in C#. This C# is compiled down to C++, and it's part that you can interface with to mod the game. [beatsaber-hook](TODO:link) provides utilities to interact with this layer and the underlying C# code for both the game and the Unity engine.
-
-
-### Il2Cpp and codegen
-
-`il2cpp` is the mechanism that Unity uses to compile game code into C++. `libil2cpp` and beatsaber-hook's `il2cpp_utils` can be used to interface with the game's original C# types and methods. Important to note that most of the values returned by these methods are pointers to objects with C# types.
-
-Here's a super high-level view at commonly used types and methods:
-```c++
-Il2CppObject* generic_object; // untyped reference to an arbitrary C# object
-std::optional<Il2CppObject*> member_value = il2cpp_utils::GetPropertyValue(generic_object, "property_name");
-std::optional<bool> typed_property = il2cpp_utils::GetPropertyValue<bool>(generic_object, "string_property");
-MethodInfo* member_method = il2cpp_utils::FindMethod(generic_object, "method_name");
-std::optional<bool> method_retval = il2cpp_utils::RunMethod<bool>(generic_object, "method_name", some_arg)
-Il2CppClass* cs_class = il2cpp_utils::GetClassFromName("Namespace", "ClassName");
-System::Type class_type_reference = cs_class::GetType();
-
-Il2CppString* string_from_game; // C# strings are pointers to UTF-16 strings
-std::string native_string = to_utf8(csstrtostr(string_from_game)); 
-```
-
-For a full view of the interface, look into [il2cpp-utils.hpp](TODO:link)
-
-[codegen](TODO:link) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely because they provide full intellisense/auto-completion, and can help avoid some boilerplate.
-
-Here's an brief comparison between some of the methods shown above and their codegen equivalents:
-```c++
-// TODO
-```
+Beat Saber is made using Unity and most of the game is written in C#. This C# is compiled down to C++, and it's part that you can interface with to mod the game. [beatsaber-hook](TODO:link) provides utilities to interact with this layer and the underlying C# code for both the game and the Unity engine. At a high level, the modding process involves finding and hooking some game method and using UnityEngine to interact with the game world. In this section we'll explore these concepts.
 
 
 ### Hooks
@@ -195,11 +193,60 @@ Instead of dumping the code yourself, one alternative is to search through what'
 *Searching through codegen headers can be quite effective, and will provide the same function signatures as dnSpy.*
 
 
+### Il2Cpp and codegen
+
+`il2cpp` is the mechanism that Unity uses to compile game code into C++. `libil2cpp` and beatsaber-hook's `il2cpp_utils` can be used to interface with the game's original C# types and methods. Important to note that most of the values returned by these methods are pointers to objects with C# types.
+
+Here's a super high-level view at commonly used types and methods:
+```c++
+Il2CppObject* generic_object; // untyped reference to an arbitrary C# object
+std::optional<Il2CppObject*> member_value = il2cpp_utils::GetPropertyValue(generic_object, "property_name");
+std::optional<T> typed_property = il2cpp_utils::GetPropertyValue<T>(generic_object, "string_property");
+MethodInfo* member_method = il2cpp_utils::FindMethod(generic_object, "method_name");
+std::optional<T> method_retval = il2cpp_utils::RunMethod<T>(generic_object, "method_name", some_arg);
+// FindMethod and RunMethod also have unsafe versions which do not do type checking 
+Il2CppClass* cs_class = il2cpp_utils::GetClassFromName("Namespace", "ClassName");
+System::Type class_type_reference = cs_class::GetType();
+
+Il2CppString* string_from_game; // C# strings are pointers to UTF-16 strings
+std::string native_string = to_utf8(csstrtostr(string_from_game)); 
+```
+
+For a full view of the interface, look into [il2cpp-utils.hpp](TODO:link)
+
+[codegen](TODO:link) is a QPM package that contains auto-generated headers of the full Beat Saber C# interface. These can often be preferable to using il2cpp directly, namely because they provide full intellisense/auto-completion, and can help avoid some boilerplate.
+
+Here's an brief comparison between some of the methods shown above and their codegen equivalents:
+```c++
+// TODO
+```
+
+
 ### Unity engine
 
-Since the game itself is made with Unity, you can use everything available in the [Unity Scripting API](https://docs.unity3d.com/ScriptReference/index.html) to interface with the game world.
+Since the game itself is made with Unity, you can use everything available in the [Unity Scripting API](https://docs.unity3d.com/ScriptReference/index.html) to interface with the game world. While an in-depth look at Unity is not in the scope of this document, here are a few pointers to get started.
 
-TODO:anything else to talk about here other than link to docs?
+- Everything in the world is a `GameObject`. GameObjects all have a `Transform` which dictates their place in the hierarchy and position in the game world. `Component`s may be added to GameObjects which provide scripted functionality.
+- If you have the PC version of Beat Saber, you can use [Runtime Unity Editor](https://github.com/ManlyMarco/RuntimeUnityEditor) to explore the Unity game world, scene hierarchy, and even a C# REPL in-game. Most of the PC and Quest versions are identical, so information from here can be useful for your Quest mod. If you _don't_ have the PC version, you may be able to get help from someone in Discord to screenshot the GameObject hierarchy from a particular screen.
+
+Here's a few quick examples of interacting with the Unity API:
+```c++
+// Find an existing GameObject
+UnityEngine::GameObject* existing_object = UnityEngine::GameObject::Find(il2cpp_utils::createcsstr("GameObjectName"));
+if (existing_object == nullptr) return; // the object was not found in the scene
+
+// Find a Component in a GameObject by type
+HMUI::CurvedTextMeshPro* child_text = existing_object->FindObjectOfType<HMUI::CurvedTextMeshPro*>();
+Il2CppString* child_text_value = child_text->get_text();
+
+// Create a new GameObject and give it a parent
+UnityEngine::GameObject* my_object = UnityEngine::GameObject::New_ctor(il2cpp_utils::createcsstr("MyNewGameObject"));
+my_object->get_transform()->SetParent(existing_object->get_transform(), false);
+
+// Adding a Component to a GameObject
+HMUI::CurvedTextMeshPro* my_text = my_object->AddComponent<HMUI::CurvedTextMeshPro*>();
+my_text->set_text(il2cpp_utils::createcsstr("hello world"));
+```
 
 
 ---
