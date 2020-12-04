@@ -6,7 +6,7 @@ Certain assumptions are made, like that you are at least vaguely familiar with s
 
 When in doubt, check out the [BSMG Discord #quest-mod-dev channel](https://discord.gg/beatsabermods), and try searching on Discord before asking questions. Browsing through source code of existing mods is another great way to familiarize yourself with coding patterns and practices.
 
-Last updated: 20 November 2020, Beat Saber 1.13.0
+Last updated: 4 December 2020, Beat Saber 1.13.0
 
 **Table of Contents**
 - [Prerequisites](#prerequisites)
