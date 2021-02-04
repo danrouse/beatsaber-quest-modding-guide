@@ -126,20 +126,20 @@ At a high level, the modding process goes like this:
 
 ### Hooks
 
-Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using the `MAKE_OFFSET_HOOKLESS` macro, then you install the hook using the `INSTALL_HOOK_OFFSETLESS` macro.
+Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using the `MAKE_HOOK_OFFSETLESS` macro, then you install the hook using the `INSTALL_HOOK_OFFSETLESS` macro.
 
-`MAKE_OFFSET_HOOKLESS` takes the args: `hook_name, return_type, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, and `...args` is all of the arguments passed to the original method. When hooking an *instance method*, the first argument will always be a pointer to the class instance itself, and this self-reference is _not_ included in the number of args specified when installing the hook.
+`MAKE_HOOK_OFFSETLESS` takes the args: `hook_name, return_type, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, and `...args` is all of the arguments passed to the original method. When hooking an *instance method*, the first argument will always be a pointer to the class instance itself, and this self-reference is _not_ included in the number of args specified when installing the hook.
 
 Hooks effectively replace the original function call, so you generally need to call the original function at some point in your hook. Make sure to return the appropriate type for the function you are hooking:
 ```c++
 // For a void hook, just make sure to call the original at some point
-MAKE_OFFSET_HOOKLESS(MyHook, void, Il2CppObject* self, SomeType arg1, SomeType arg2) {
+MAKE_HOOK_OFFSETLESS(MyHook, void, Il2CppObject* self, SomeType arg1, SomeType arg2) {
   // your code here
   MyHook(self, arg1, arg2);
   // or here
 }
 // When the hooked function returns a value, make sure to return something of that type
-MAKE_OFFSET_HOOKLESS(MyHook2, int, Il2CppObject* self, SomeType arg1, SomeType arg2) {
+MAKE_HOOK_OFFSETLESS(MyHook2, int, Il2CppObject* self, SomeType arg1, SomeType arg2) {
   int original_value = MyHook2(self, arg1, arg2);
   // your code here
   return original_value;
@@ -153,7 +153,7 @@ INSTALL_HOOK_OFFSETLESS(getLogger(), MyHook, il2cpp_utils::FindMethodUnsafe("Som
 
 As an example to put these together, let's say you want to a hook a method in the `Foo` class called `SomeMethod` that returns a `float` and takes one `char*` argument:
 ```c++
-MAKE_OFFSET_HOOKLESS(MyHook, float, Il2CppObject* self, char* some_arg) {
+MAKE_HOOK_OFFSETLESS(MyHook, float, Il2CppObject* self, char* some_arg) {
   /* do something */
   return MyHook(self, some_arg);
 }
