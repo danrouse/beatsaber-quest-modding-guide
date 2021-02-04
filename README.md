@@ -298,7 +298,7 @@ To install QuestUI using QPM, run `qpm dependency add questui`
 
 Most of the information you'll need to experiment with these elements lives in the [BeatSaberUI.hpp header](https://github.com/darknight1050/questui/blob/master/shared/BeatSaberUI.hpp).
 
-To create a simple mod settings menu, all you need is a `DidActivate` function matching [the signature `void DidActivate(HMUI::ViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)`](https://github.com/darknight1050/questui/blob/master/shared/QuestUI.hpp#L25). When `firstActivation` is true, you can add your UI elements onto the ViewController. Finally, in your mod's `load()`, register it with QuestUI by calling `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo, title, YourDidActivateMethod)`, and a button will be added to the Mod Settings menu.
+To create a simple mod settings menu, all you need is a `DidActivate` function matching the signature [`void DidActivate(HMUI::ViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)`](https://github.com/darknight1050/questui/blob/master/shared/QuestUI.hpp#L25). When `firstActivation` is true, you can add your UI elements onto the ViewController. Finally, in your mod's `load()`, register it with QuestUI by calling `QuestUI::Register::RegisterModSettingsViewController(modInfo, YourDidActivateMethod)`, and a button will be added to the Mod Settings menu.
 
 To create a more complex mod settings menu, you'll need to make a Custom Type extending `HMUI::ViewController` and overriding the `DidActivate` method to add your UI elements. After registering the custom type, call `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo, title)`,
 
