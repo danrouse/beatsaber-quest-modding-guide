@@ -98,8 +98,6 @@ Once your project directory is set up and all template tags have been replaced.
 
 - Run `qpm restore`. This will download the dependencies defined in `qpm.json`. When you add or change a dependency, rerun the command. See [the qpm repository](https://github.com/sc2ad/QuestPackageManager) for more information on using qpm.
 - To run an initial test build, run `build.ps1`.
-  - *Note*: The template may include references to a specific version of `beatsaber_hook` which qpm may download a newer version of. This will cause the initial build to fail and you'll need to change those versioned references, e.g. find and replace `beatsaber_hook_0_8_2` with `beatsaber_hook_0_8_4` (assuming `0_8_4` is the newest downloaded version)
-- Once you get the build succeeding, congratulations! You've compiled a Beat Saber mod.
 
 **Tips and tricks**:
 - Commands can be run from a PowerShell terminal inside VSCode (Terminal > New Terminal or Ctrl+Shift+\`)
@@ -300,7 +298,11 @@ To install QuestUI using QPM, run `qpm dependency add questui`
 
 Most of the information you'll need to experiment with these elements lives in the [BeatSaberUI.hpp header](https://github.com/darknight1050/questui/blob/master/shared/BeatSaberUI.hpp).
 
-To create a simple mod settings menu, you'll need to make a Custom Type extending `HMUI::ViewController` and overriding the `DidActivate` method to add your UI elements. After registering the custom type, call `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo, title)`, and a button will be added to the Mod Settings menu which will load your custom ViewController. Note that FlowCoordinators can also be similarly created and registered for more complex menus.
+To create a simple mod settings menu, all you need is a `DidActivate` function matching [the signature `void DidActivate(HMUI::ViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)](https://github.com/darknight1050/questui/blob/master/shared/QuestUI.hpp#L25). When `firstActivation` is true, you can add your UI elements onto the ViewController. Finally, in your mod's `load()`, register it with QuestUI by calling `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo, title, YourDidActivateMethod)`, and a button will be added to the Mod Settings menu.
+
+To create a more complex mod settings menu, you'll need to make a Custom Type extending `HMUI::ViewController` and overriding the `DidActivate` method to add your UI elements. After registering the custom type, call `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo, title)`,
+
+You can also create a _much_ more complex mod settings menu by making your own `HMUI::FlowCoordinator` (as well as corresponding ViewControllers), and registering that with `QuestUI::Register::RegisterModSettingsFlowCoordinator<T>(modInfo)`.
 
 As always, examples can be found with a GitHub search, for example [searching for RegisterModSettingsViewController](https://github.com/search?q=RegisterModSettingsViewController&type=code).
 
