@@ -144,14 +144,14 @@ MAKE_HOOK_OFFSETLESS(MyHook2, int, Il2CppObject* self, SomeType arg1, SomeType a
 }
 ```
 
-`INSTALL_HOOK_OFFSETLESS` is where you install your hook code to the correct place using `il2cpp`, so that it runs when it's supposed to. For this, you'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeNamespace::SomeClass::SomeMethod` which takes two args, then it'd look like this:
+`INSTALL_HOOK_OFFSETLESS` is where you install your hook code onto the actual method you want to hook. For this, you'll need to find the method, generally by using `ilcpp_utils`. You'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeNamespace::SomeClass::SomeMethod` which takes two args, then it'd look something like this:
 ```c++
 INSTALL_HOOK_OFFSETLESS(getLogger(), MyHook, il2cpp_utils::FindMethodUnsafe("SomeNamespace", "SomeClass", "SomeMethod", 2))
 ```
 
-As an example to put these together, let's say you want to a hook a method in the `Foo` class called `SomeMethod` that returns a `float` and takes one `char*` argument:
+As an example to put these together, let's say you want to a hook a method in the `Foo` class called `SomeMethod` that returns a `float` and takes one `Il2CppString*` argument:
 ```c++
-MAKE_HOOK_OFFSETLESS(MyHook, float, Il2CppObject* self, char* some_arg) {
+MAKE_HOOK_OFFSETLESS(MyHook, float, Il2CppObject* self, Il2CppString* some_arg) {
   /* do something */
   return MyHook(self, some_arg);
 }
@@ -160,7 +160,7 @@ extern "C" void load() {
 }
 ```
 
-Note that when finding methods, nested namespaces use C#-style syntax: `FindMethodUnsafe("SomeNamespace.NestedNamespace", "ClassName", "MethodName", 0)`. In addition, game methods in `GlobalNamespace` take an empty string as the namespace argument, e.g. `FindMethodUnsafe("", "MainMenuViewController", "DidActivate", 3);`.
+The `FindMethod`/`FindMethodUnsafe` parameters are as follows: namespace of the C# method, type name of the C# type, method name, and number of arguments. Methods in the game's `GlobalNamespace` take an empty string as the namespace argument (e.g. `FindMethodUnsafe("", "MainMenuViewController", "DidActivate", 3)`), and nested types are separated by a `/` (`Declaring/Nested`).
 
 **Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup with a null pointer dereference after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself. Even if your game doesn't crash, if you do not have the exact same function signature for your hook, weird things may happen!
 
@@ -179,7 +179,7 @@ Instead of dumping the code yourself, one alternative is to search through what'
 - Use your IDE to search through the codegen headers to find hookable methods.
 
 ![Searching through codegen headers using VSCode](vscode-codegen-example.png)
-*Searching through codegen headers can be quite effective, and will provide the same function signatures as dnSpy.*
+*Searching through codegen headers can be quite effective, and will provide similar function signatures as dnSpy.*
 
 ##### Dumping DLLs from the Quest
 
@@ -238,11 +238,14 @@ void something(Foo* instance) {
   // You can use this:
   auto result = instance->bar();
 
-  // Similarly for getting properties
+  // For fields:
+  auto field = il2cpp_utils::GetFieldValue<T>(instance, "someField");
+  // Field values can generally be accessed directly
+  auto field = instance->someField;
+
+  // For properties:
   auto prop = il2cpp_utils::GetPropertyValue<T>(instance, "someProperty");
-  // You can get the property directly,
-  auto prop = instance->someProperty; // usually unsafe
-  // or more often, use the generated getter:
+  // You will generally have a generated getter method:
   auto prop = instance->get_someProperty();
 }
 ```
@@ -300,7 +303,7 @@ Most of the information you'll need to experiment with these elements lives in t
 
 To create a simple mod settings menu, all you need is a `DidActivate` function matching the signature [`void DidActivate(HMUI::ViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)`](https://github.com/darknight1050/questui/blob/master/shared/QuestUI.hpp#L25). When `firstActivation` is true, you can add your UI elements onto the ViewController. Finally, in your mod's `load()`, register it with QuestUI by calling `QuestUI::Register::RegisterModSettingsViewController(modInfo, YourDidActivateMethod)`, and a button will be added to the Mod Settings menu.
 
-To create a more complex mod settings menu, you'll need to make a Custom Type extending `HMUI::ViewController` and overriding the `DidActivate` method to add your UI elements. After registering the custom type, call `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo, title)`,
+To create a more complex mod settings menu, you'll need to make a Custom Type extending `HMUI::ViewController` and overriding the `DidActivate` method to add your UI elements. After registering the custom type, call `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo)`,
 
 You can also create a _much_ more complex mod settings menu by making your own `HMUI::FlowCoordinator` (as well as corresponding ViewControllers), and registering that with `QuestUI::Register::RegisterModSettingsFlowCoordinator<T>(modInfo)`.
 
@@ -336,8 +339,8 @@ MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
 ) {
   BeatmapObjectSpawnMovementData_Init(self, noteLinesCount, startNoteJumpMovementSpeed, startBpm, noteJumpStartBeatOffset, jumpOffsetY, rightVec, forwardVec);
   getLogger().info(
-    "BeatmapObjectSpawnMovementData_Init called. " +
-    "startNoteJumpMovementSpeed is: " + std::to_string(startNoteJumpMovementSpeed)
+    "BeatmapObjectSpawnMovementData_Init called. startNoteJumpMovementSpeed is: %.2f",
+    startNoteJumpMovementSpeed
   );
 }
 
@@ -381,7 +384,7 @@ std::optional<UnityEngine::GameObject*> FindComponentWithText(std::string_view f
       }
     }
   }
-  return {};
+  return std::nullopt;
 }
 ```
 
