@@ -457,7 +457,7 @@ The `bmbmfmod.json` file contains metadata for BMBF to allow your mod to be inst
 - [Visual Studio Code](https://code.visualstudio.com/) - relatively lightweight cross-platform code editor
 - [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template) - starting point for writing a mod
 - [Runtime Unity Editor](https://github.com/ManlyMarco/RuntimeUnityEditor) - extension for PC Beat Saber to explore the Unity game world
-- [Fern's BeatSaber C# porting guide](https://github.com/Fernthedev/beatsaber-quest-porting-guide) - a guide for Porting BeatSaber C# PC mods to Quest il2Cpp C++ mods
+- [Fern's BeatSaber C# porting guide](https://github.com/Fernthedev/beatsaber-quest-porting-guide) - a guide for porting BeatSaber C# PC mods to Quest il2Cpp C++ mods
 
 ### Example repositories
 - [GitHub search for MAKE_HOOK_OFFSETLESS is fairly effective](https://github.com/search?q=MAKE_HOOK_OFFSETLESS&type=code)
