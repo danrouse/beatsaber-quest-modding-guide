@@ -440,7 +440,8 @@ When you're ready to share your work, package it into an installable zip file wi
 
 #### Distributing mods with dependencies
 
-The `bmbmfmod.json` file contains metadata for BMBF to allow your mod to be installed and managed correctly. Any dependencies _that are not core mods_ must be defined in your bmbfmod, and copied into your distributable .zip in `buildBMBF.ps1`.
+The `mod.json` file contains metadata for BMBF to allow your mod to be installed and managed correctly. Any dependencies _that are not core mods_ must be defined in your mod.json, and copied into your distributable .qmod in `buildQMOD.ps1`.
+The schema for it can be found [here](https://github.com/Lauriethefish/QuestPatcher/blob/main/resources/qmod.schema.json).
 
 ---
 
