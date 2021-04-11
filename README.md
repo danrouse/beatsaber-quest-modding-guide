@@ -108,7 +108,7 @@ Once your project directory is set up and all template tags have been replaced.
 ## Build scripts
 
 - `build.ps1` will just build the mod (generates `.so` file) and nothing else. Useful for confirming code validity, but you may want to use other scripts to do more useful things with the build output.
-- `buildBMBF.ps1` will build the mod and package it into a `.zip` that can be installed via BMBF. Once you are ready to share the mod with others, this is the thing you distribute.
+- `buildQMOD.ps1` will build the mod and package it into a `.qmod` that can be installed via BMBF. Once you are ready to share the mod with others, this is the thing you distribute.
 - `copy.ps1` will build the mod and copy it directly to your Quest's mods directory (`/sdcard/Android/data/com.beatgames.beatsaber/files/mods`). Run `copy.ps1 --log` to begin logging from the Quest to your terminal after the files are copied and the game restarts.
 
 ---
@@ -457,6 +457,7 @@ The `bmbmfmod.json` file contains metadata for BMBF to allow your mod to be inst
 - [Visual Studio Code](https://code.visualstudio.com/) - relatively lightweight cross-platform code editor
 - [Lauriethefish's project template](https://github.com/Lauriethefish/quest-mod-template) - starting point for writing a mod
 - [Runtime Unity Editor](https://github.com/ManlyMarco/RuntimeUnityEditor) - extension for PC Beat Saber to explore the Unity game world
+- [Fern's BeatSaber C# porting guide](https://github.com/Fernthedev/beatsaber-quest-porting-guide) - a guide for porting BeatSaber C# PC mods to Quest il2Cpp C++ mods
 
 ### Example repositories
 - [GitHub search for MAKE_HOOK_OFFSETLESS is fairly effective](https://github.com/search?q=MAKE_HOOK_OFFSETLESS&type=code)
