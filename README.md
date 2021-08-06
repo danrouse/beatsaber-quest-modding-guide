@@ -392,7 +392,7 @@ At any rate, let's say we want to replace the text on the main menu button that 
 #include "GlobalNamespace/MainMenuViewController.hpp"
 #include "HMUI/CurvedTextMeshPro.hpp"
 MAKE_HOOK_MATCH(MainMenuViewController_DidActivate, &GlobalNamespace::MainMenuViewController::DidActivate, void,
-  MainMenuViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling
+  GlobalNamespace::MainMenuViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling
 ) {
   MainMenuViewController_DidActivate(self, firstActivation, addedToHierarchy, screenSystemEnabling);
   auto solo_button = UnityEngine::GameObject::Find(il2cpp_utils::createcsstr("SoloButton"));
