@@ -124,45 +124,43 @@ At a high level, the modding process goes like this:
 
 ### Hooks
 
-Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using the `MAKE_HOOK_OFFSETLESS` macro, then you install the hook using the `INSTALL_HOOK_OFFSETLESS` macro.
+Hooks are the primary way of interfacing with the game. You find a method that the game calls, and run some of your code whenever that method is called. The hooks themselves are written in two parts. First, you create the hook using the `MAKE_HOOK_MATCH` macro, then you install the hook using the `INSTALL_HOOK` macro.
 
-`MAKE_HOOK_OFFSETLESS` takes the args: `hook_name, return_type, ...args`, where `hook_name` is whatever you want it to be, `return_type` is the actual type that the original function returns, and `...args` is all of the arguments passed to the original method. When hooking an *instance method*, the first argument will always be a pointer to the class instance itself, and this self-reference is _not_ included in the number of args specified when installing the hook.
+`MAKE_HOOK_MATCH` takes the args: `hook_name, methodPointer, return_type, ...args`, where `hook_name` is whatever you want it to be, `methodPointer` is the method you want to hook, `return_type` is the actual type that the original function returns, and `...args` is all of the arguments passed to the original method. When hooking an *instance method*, the first argument will always be a pointer to the class instance itself, and this self-reference is _not_ included in the number of args specified when installing the hook.
 
 Hooks effectively replace the original function call, so you generally need to call the original function at some point in your hook. Make sure to return the appropriate type for the function you are hooking:
 ```c++
 // For a void hook, just make sure to call the original at some point
-MAKE_HOOK_OFFSETLESS(MyHook, void, Il2CppObject* self, SomeType arg1, SomeType arg2) {
+MAKE_HOOK_MATCH(MyHook, &Namespace::Class::Method, void, Namespace::Class* self, SomeType arg1, SomeType arg2) {
   // your code here
   MyHook(self, arg1, arg2);
   // or here
 }
 // When the hooked function returns a value, make sure to return something of that type
-MAKE_HOOK_OFFSETLESS(MyHook2, int, Il2CppObject* self, SomeType arg1, SomeType arg2) {
+MAKE_HOOK_MATCH(MyHook2, &Namespace::Class::Method, int, Namespace::Class* self, SomeType arg1, SomeType arg2) {
   int original_value = MyHook2(self, arg1, arg2);
   // your code here
   return original_value;
 }
 ```
 
-`INSTALL_HOOK_OFFSETLESS` is where you install your hook code onto the actual method you want to hook. For this, you'll need to find the method, generally by using `ilcpp_utils`. You'll need to know the call path to the method, and the number of arguments it takes. If you want to hook `SomeNamespace::SomeClass::SomeMethod` which takes two args, then it'd look something like this:
+`INSTALL_HOOK` is where you install your hook code onto the actual method you want to hook. It will look something like this:
 ```c++
-INSTALL_HOOK_OFFSETLESS(getLogger(), MyHook, il2cpp_utils::FindMethodUnsafe("SomeNamespace", "SomeClass", "SomeMethod", 2))
+INSTALL_HOOK(getLogger(), MyHook);
 ```
 
 As an example to put these together, let's say you want to a hook a method in the `Foo` class called `SomeMethod` that returns a `float` and takes one `Il2CppString*` argument:
 ```c++
-MAKE_HOOK_OFFSETLESS(MyHook, float, Il2CppObject* self, Il2CppString* some_arg) {
+MAKE_HOOK_MATCH(MyHook, &GlobalNamespace::Foo::SomeMethod, float, GlobalNamespace::Foo* self, Il2CppString* some_arg) {
   /* do something */
   return MyHook(self, some_arg);
 }
 extern "C" void load() {
-  INSTALL_HOOK_OFFSETLESS(getLogger(), MyHook, il2cpp_utils::FindMethodUnsafe("", "Foo", "SomeMethod", 1));
+  INSTALL_HOOK(getLogger(), MyHook);
 }
 ```
 
-The `FindMethod`/`FindMethodUnsafe` parameters are as follows: namespace of the C# method, type name of the C# type, method name, and number of arguments. Methods in the game's `GlobalNamespace` take an empty string as the namespace argument (e.g. `FindMethodUnsafe("", "MainMenuViewController", "DidActivate", 3)`), and nested types are separated by a `/` (`Declaring/Nested`).
-
-**Important note**: Mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup with a null pointer dereference after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself. Even if your game doesn't crash, if you do not have the exact same function signature for your hook, weird things may happen!
+**Important note**: When using any of the **unsafe** hook macros mistakes in hook definitions and installation are a *very* common source of issues and crashes. If your game crashes on startup with a null pointer dereference after creating a new hook, double (and triple!) check that everything is correct, including the class name, method name, number of arguments (surprisingly easy to miscount), and the function signature of the hook itself. Even if your game doesn't crash, if you do not have the exact same function signature for your hook, weird things may happen!
 
 
 #### Finding methods to hook
@@ -226,11 +224,11 @@ For a full view of the interface, look into [the header for il2cpp_utils](https:
 Here's an brief comparison between some of the methods shown above and their codegen equivalents:
 ```c++
 // In a hook: say you're hooking GlobalNamespace::Foo::Bar
-INSTALL_HOOK_OFFSETLESS(MyHook, FindMethodUnsafe("", "Foo", "Bar", 0));
+INSTALL_HOOK(getLogger(), MyHook);
 // If you include that class from codegen
 #include "GlobalNamespace/Foo.hpp"
 // Then instead of an Il2CppObject*, you can use an actual instance of Foo*
-MAKE_HOOK_OFFSETLESS(MyHook, void, Foo* self) { MyHook(self); }
+MAKE_HOOK_MATCH(MyHook, &GlobalNamespace::Foo::Bar, void, GlobalNamespace::Foo* self) { MyHook(self); }
 
 void something(Foo* instance) {
   // Methods can be called directly, so instead of this:
@@ -288,7 +286,7 @@ To install custom-types using QPM, run `qpm dependency add custom-types`
 Broadly speaking, custom types are created in three parts:
 - declaring the type in a header using the macros from `custom-types/shared/macros.hpp`,
 - defining the implementation within a source file,
-- and registering the type inside `load()` using `custom-types::Register::RegisterTypes<T>()`
+- and registering the type inside `load()` using `custom_types::Register::AutoRegister()`
 
 To find examples of custom-types being created and used, try [searching GitHub for DECLARE_CLASS_CODEGEN](https://github.com/search?q=DECLARE_CLASS_CODEGEN&type=code).
 
@@ -301,11 +299,11 @@ To install QuestUI using QPM, run `qpm dependency add questui`
 
 Most of the information you'll need to experiment with these elements lives in the [BeatSaberUI.hpp header](https://github.com/darknight1050/questui/blob/master/shared/BeatSaberUI.hpp).
 
-To create a simple mod settings menu, all you need is a `DidActivate` function matching the signature [`void DidActivate(HMUI::ViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)`](https://github.com/darknight1050/questui/blob/master/shared/QuestUI.hpp#L25). When `firstActivation` is true, you can add your UI elements onto the ViewController. Finally, in your mod's `load()`, register it with QuestUI by calling `QuestUI::Register::RegisterModSettingsViewController(modInfo, YourDidActivateMethod)`, and a button will be added to the Mod Settings menu.
+To create a simple mod settings menu, all you need is a `DidActivate` function matching the signature [`void DidActivate(HMUI::ViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)`](https://github.com/darknight1050/questui/blob/master/shared/QuestUI.hpp#L25). When `firstActivation` is true, you can add your UI elements onto the ViewController. Finally, in your mod's `load()`, register it with QuestUI by calling `QuestUI::Register::RegisterModSettingsViewController<T*>(modInfo)`, and a button will be added to the Mod Settings menu.
 
 To create a more complex mod settings menu, you'll need to make a Custom Type extending `HMUI::ViewController` and overriding the `DidActivate` method to add your UI elements. After registering the custom type, call `QuestUI::Register::RegisterModSettingsViewController<T>(modInfo)`,
 
-You can also create a _much_ more complex mod settings menu by making your own `HMUI::FlowCoordinator` (as well as corresponding ViewControllers), and registering that with `QuestUI::Register::RegisterModSettingsFlowCoordinator<T>(modInfo)`.
+You can also create a _much_ more complex mod settings menu by making your own `HMUI::FlowCoordinator` (as well as corresponding ViewControllers), and registering that with `QuestUI::Register::RegisterModSettingsFlowCoordinator<T*>(modInfo)`.
 
 As always, examples can be found with a GitHub search, for example [searching for RegisterModSettingsViewController](https://github.com/search?q=RegisterModSettingsViewController&type=code).
 
@@ -327,15 +325,16 @@ Eventually you'll come across the `BeatmapObjectSpawnMovementData` class. If you
 
 ```c++
 #include "GlobalNamespace/BeatmapObjectSpawnMovementData.hpp"
-MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
-  BeatmapObjectSpawnMovementData* self,
+#include "UnityEngine/Vector3.hpp"
+MAKE_HOOK_MATCH(BeatmapObjectSpawnMovementData_Init, &GlobalNamespace::BeatmapObjectSpawnMovementData::Init, void,
+  GlobalNamespace::BeatmapObjectSpawnMovementData* self,
   int noteLinesCount,
   float startNoteJumpMovementSpeed,
   float startBpm,
   float noteJumpStartBeatOffset,
   float jumpOffsetY,
-  Vector3 rightVec,
-  Vector3 forwardVec
+  UnityEngine::Vector3 rightVec,
+  UnityEngine::Vector3 forwardVec
 ) {
   BeatmapObjectSpawnMovementData_Init(self, noteLinesCount, startNoteJumpMovementSpeed, startBpm, noteJumpStartBeatOffset, jumpOffsetY, rightVec, forwardVec);
   getLogger().info(
@@ -346,10 +345,9 @@ MAKE_HOOK_OFFSETLESS(BeatmapObjectSpawnMovementData_Init, void,
 
 extern "C" void load() {
   il2cpp_functions::Init();
-  INSTALL_HOOK_OFFSETLESS(
+  INSTALL_HOOK(
     getLogger(),
-    BeatmapObjectSpawnMovementData_Init,
-    il2cpp_utils::FindMethodUnsafe("", "BeatmapObjectSpawnMovementData", "Init", 7)
+    BeatmapObjectSpawnMovementData_Init
   );
 }
 ```
@@ -393,7 +391,7 @@ At any rate, let's say we want to replace the text on the main menu button that 
 ```c++
 #include "GlobalNamespace/MainMenuViewController.hpp"
 #include "HMUI/CurvedTextMeshPro.hpp"
-MAKE_HOOK_OFFSETLESS(MainMenuViewController_DidActivate, void,
+MAKE_HOOK_MATCH(MainMenuViewController_DidActivate, &GlobalNamespace::MainMenuViewController::DidActivate, void,
   MainMenuViewController* self, bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling
 ) {
   MainMenuViewController_DidActivate(self, firstActivation, addedToHierarchy, screenSystemEnabling);
@@ -403,10 +401,9 @@ MAKE_HOOK_OFFSETLESS(MainMenuViewController_DidActivate, void,
 }
 extern "C" void load() {
   il2cpp_functions::Init();
-  INSTALL_HOOK_OFFSETLESS(
+  INSTALL_HOOK(
     getLogger(),
-    MainMenuViewController_DidActivate,
-    il2cpp_utils::FindMethodUnsafe("", "MainMenuViewController", "DidActivate", 3)
+    MainMenuViewController_DidActivate
   );
 }
 ```
@@ -441,7 +438,7 @@ When you're ready to share your work, package it into an installable zip file wi
 #### Distributing mods with dependencies
 
 The `mod.json` file contains metadata for BMBF to allow your mod to be installed and managed correctly. Any dependencies _that are not core mods_ must be defined in your mod.json, and copied into your distributable .qmod in `buildQMOD.ps1`.
-The schema for it can be found [here](https://github.com/Lauriethefish/QuestPatcher/blob/main/resources/qmod.schema.json).
+The schema for it can be found [here](https://github.com/Lauriethefish/QuestPatcher/blob/main/QuestPatcher.Core/Resources/qmod.schema.json).
 
 ---
 
